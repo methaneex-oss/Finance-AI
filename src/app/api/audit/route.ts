@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-
-const ORGANIZATION_ID = process.env.FINANCE_AI_ORGANIZATION_ID ?? "demo-org";
+import { getOrganizationId } from "@/lib/organization";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -9,8 +8,9 @@ export async function GET(request: NextRequest) {
   const limit = Number.isFinite(limitValue) ? Math.min(Math.max(Math.floor(limitValue), 1), 200) : 50;
 
   try {
+    const organizationId = getOrganizationId();
     const logs = await prisma.auditLog.findMany({
-      where: { organizationId: ORGANIZATION_ID },
+      where: { organizationId },
       include: { actor: { select: { id: true, name: true, email: true, role: true } } },
       orderBy: { createdAt: "desc" },
       take: limit,
