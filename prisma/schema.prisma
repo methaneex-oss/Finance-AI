@@ -1,0 +1,138 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CategoryClassification {
+  INCOME
+  EXPENSE
+  FUND
+}
+
+enum EntryStatus {
+  POSTED
+  VOIDED
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  FINANCE_OFFICER
+  AUDITOR
+  VIEWER
+}
+
+model Organization {
+  id                  String             @id @default(cuid())
+  name                String
+  baseCurrency        String             @default("NGN")
+  fiscalYearStartMonth Int               @default(1)
+  fiscalYearStartDay   Int               @default(1)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  branches            Branch[]
+  users               User[]
+  categories          FinancialCategory[]
+  entries             FinancialEntry[]
+  auditLogs           AuditLog[]
+}
+
+model Branch {
+  id             String         @id @default(cuid())
+  organizationId String
+  name           String
+  code           String?
+  active         Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users          User[]
+  entries        FinancialEntry[]
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+model User {
+  id             String       @id @default(cuid())
+  organizationId String
+  branchId       String?
+  name           String
+  email          String       @unique
+  role           UserRole     @default(VIEWER)
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch         Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  entries        FinancialEntry[]
+  auditLogs      AuditLog[]
+  @@index([organizationId])
+}
+
+model FinancialCategory {
+  id             String               @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  classification CategoryClassification
+  active         Boolean              @default(true)
+  isTemporary    Boolean              @default(false)
+  startsAt       DateTime?
+  endsAt         DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lines          FinancialEntryLine[]
+  @@unique([organizationId, name])
+  @@index([organizationId, active])
+}
+
+model FinancialEntry {
+  id             String               @id @default(cuid())
+  organizationId String
+  branchId       String?
+  createdById    String?
+  entryDate      DateTime
+  description    String
+  reference      String?
+  status         EntryStatus          @default(POSTED)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch         Branch?              @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  createdBy      User?                @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  lines          FinancialEntryLine[]
+  @@index([organizationId, entryDate])
+  @@index([branchId, entryDate])
+}
+
+model FinancialEntryLine {
+  id         String           @id @default(cuid())
+  entryId    String
+  categoryId String
+  amount     Decimal          @db.Decimal(20, 2)
+  createdAt  DateTime         @default(now())
+  entry      FinancialEntry   @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  category   FinancialCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  @@index([entryId])
+  @@index([categoryId])
+}
+
+model AuditLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  actorId        String?
+  action         String
+  entityType     String
+  entityId       String
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor          User?        @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  @@index([organizationId, createdAt])
+  @@index([entityType, entityId])
+}
