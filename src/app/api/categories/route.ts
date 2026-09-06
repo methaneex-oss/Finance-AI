@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-const DEMO_ORGANIZATION_ID = "demo-org";
+const ORGANIZATION_ID = process.env.FINANCE_AI_ORGANIZATION_ID ?? "demo-org";
 
 export async function GET() {
-  const categories = await prisma.financialCategory.findMany({
-    where: { organizationId: DEMO_ORGANIZATION_ID },
-    orderBy: { createdAt: "asc" },
-  });
-  return NextResponse.json(categories);
+  try {
+    const categories = await prisma.financialCategory.findMany({
+      where: { organizationId: ORGANIZATION_ID },
+      orderBy: { createdAt: "asc" },
+    });
+    return NextResponse.json(categories);
+  } catch (error) {
+    console.error("Category lookup failed", error);
+    return NextResponse.json({ error: "Unable to load categories" }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -21,9 +26,12 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const organization = await prisma.organization.findUnique({ where: { id: ORGANIZATION_ID }, select: { id: true } });
+    if (!organization) return NextResponse.json({ error: "Organization is not configured" }, { status: 500 });
+
     const category = await prisma.financialCategory.create({
       data: {
-        organizationId: DEMO_ORGANIZATION_ID,
+        organizationId: ORGANIZATION_ID,
         name,
         description: typeof body.description === "string" ? body.description.trim() || null : null,
         classification,
