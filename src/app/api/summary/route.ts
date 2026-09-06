@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-
-const ORGANIZATION_ID = process.env.FINANCE_AI_ORGANIZATION_ID ?? "demo-org";
+import { getOrganizationId } from "@/lib/organization";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -14,9 +13,10 @@ export async function GET(request: NextRequest) {
   if (toValue && Number.isNaN(to?.getTime())) return NextResponse.json({ error: "Invalid to date" }, { status: 400 });
 
   try {
+    const organizationId = getOrganizationId();
     const entries = await prisma.financialEntry.findMany({
       where: {
-        organizationId: ORGANIZATION_ID,
+        organizationId,
         status: "POSTED",
         ...(from || to ? { entryDate: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
       },
@@ -30,14 +30,19 @@ export async function GET(request: NextRequest) {
       for (const line of entry.lines) {
         const amount = Number(line.amount);
         totals[line.category.classification] += amount;
-        const existing = byCategory[line.category.id] ?? { categoryId: line.category.id, name: line.category.name, classification: line.category.classification, total: 0 };
+        const existing = byCategory[line.category.id] ?? {
+          categoryId: line.category.id,
+          name: line.category.name,
+          classification: line.category.classification,
+          total: 0,
+        };
         existing.total += amount;
         byCategory[line.category.id] = existing;
       }
     }
 
     return NextResponse.json({
-      organizationId: ORGANIZATION_ID,
+      organizationId,
       period: { from: from?.toISOString() ?? null, to: to?.toISOString() ?? null },
       totals,
       netIncome: totals.INCOME - totals.EXPENSE,
