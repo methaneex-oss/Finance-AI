@@ -38,6 +38,7 @@ model Organization {
   users               User[]
   categories          FinancialCategory[]
   entries             FinancialEntry[]
+  metrics             FinancialMetric[]
   auditLogs           AuditLog[]
 }
 
@@ -87,6 +88,7 @@ model FinancialCategory {
   updatedAt      DateTime             @updatedAt
   organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   lines          FinancialEntryLine[]
+  metricInputs   FinancialMetricInput[]
   @@unique([organizationId, name])
   @@index([organizationId, active])
 }
@@ -119,6 +121,33 @@ model FinancialEntryLine {
   entry      FinancialEntry   @relation(fields: [entryId], references: [id], onDelete: Cascade)
   category   FinancialCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   @@index([entryId])
+  @@index([categoryId])
+}
+
+model FinancialMetric {
+  id             String                @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  formula        String
+  active         Boolean               @default(true)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  inputs         FinancialMetricInput[]
+  @@unique([organizationId, name])
+  @@index([organizationId, active])
+}
+
+model FinancialMetricInput {
+  id         String           @id @default(cuid())
+  metricId   String
+  categoryId String
+  alias      String
+  metric     FinancialMetric  @relation(fields: [metricId], references: [id], onDelete: Cascade)
+  category   FinancialCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  @@unique([metricId, alias])
+  @@unique([metricId, categoryId])
   @@index([categoryId])
 }
 
