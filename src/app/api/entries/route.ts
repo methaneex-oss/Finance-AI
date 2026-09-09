@@ -1,50 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getOrganizationId } from "@/lib/organization";
-
-type EntryLineInput = {
-  categoryId?: unknown;
-  amount?: unknown;
-};
-
-type EntryRequestBody = {
-  entryDate?: unknown;
-  description?: unknown;
-  reference?: unknown;
-  branchId?: unknown;
-  lines?: unknown;
-};
-
-type NormalizedLine = {
-  categoryId: string;
-  amount: number;
-};
-
-function parseDate(value: unknown) {
-  if (typeof value !== "string" || !value.trim()) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
+import { createFinancialEntry, listFinancialEntries } from "@/lib/financial-entry-service";
+import { validateEntryBody } from "@/lib/financial-entry-validation";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const from = parseDate(searchParams.get("from"));
-  const to = parseDate(searchParams.get("to"));
-
-  if (searchParams.get("from") && !from) return NextResponse.json({ error: "Invalid from date" }, { status: 400 });
-  if (searchParams.get("to") && !to) return NextResponse.json({ error: "Invalid to date" }, { status: 400 });
+  const from = searchParams.get("from");
+  const to = searchParams.get("to");
 
   try {
-    const organizationId = getOrganizationId();
-    const entries = await prisma.financialEntry.findMany({
-      where: {
-        organizationId,
-        ...(from || to ? { entryDate: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
-      },
-      include: { lines: { include: { category: true } }, branch: true },
-      orderBy: { entryDate: "desc" },
-    });
+    const parse = (value: string | null) => {
+      if (!value) return undefined;
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? null : date;
+    };
+    const fromDate = parse(from);
+    const toDate = parse(to);
+    if (fromDate === null) return NextResponse.json({ error: "Invalid from date" }, { status: 400 });
+    if (toDate === null) return NextResponse.json({ error: "Invalid to date" }, { status: 400 });
 
+    const entries = await listFinancialEntries(getOrganizationId(), fromDate, toDate);
     return NextResponse.json(entries);
   } catch (error) {
     console.error("Entry lookup failed", error);
@@ -53,80 +29,18 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  let body: EntryRequestBody;
-
   try {
-    body = (await request.json()) as EntryRequestBody;
-  } catch {
-    return NextResponse.json({ error: "Request body must be valid JSON" }, { status: 400 });
-  }
+    const body = (await request.json()) as Record<string, unknown>;
+    const validated = validateEntryBody(body);
+    if (!validated) {
+      return NextResponse.json({ error: "Invalid financial entry. Date, description, and at least one positive line are required." }, { status: 400 });
+    }
 
-  const entryDate = parseDate(body.entryDate);
-  const description = typeof body.description === "string" ? body.description.trim() : "";
-  const rawLines: EntryLineInput[] = Array.isArray(body.lines) ? body.lines : [];
-
-  if (!entryDate || !description || rawLines.length === 0) {
-    return NextResponse.json({ error: "entryDate, description, and at least one line are required" }, { status: 400 });
-  }
-
-  const normalizedLines: NormalizedLine[] = rawLines.map((line: EntryLineInput) => ({
-    categoryId: typeof line.categoryId === "string" ? line.categoryId.trim() : "",
-    amount: typeof line.amount === "number" || typeof line.amount === "string" ? Number(line.amount) : Number.NaN,
-  }));
-
-  if (normalizedLines.some((line: NormalizedLine) => !line.categoryId || !Number.isFinite(line.amount) || line.amount <= 0)) {
-    return NextResponse.json({ error: "Every line requires a valid category and positive amount" }, { status: 400 });
-  }
-
-  try {
     const organizationId = getOrganizationId();
     const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { id: true } });
     if (!organization) return NextResponse.json({ error: "Organization is not configured" }, { status: 500 });
 
-    const categoryIds: string[] = Array.from(new Set<string>(normalizedLines.map((line: NormalizedLine) => line.categoryId)));
-    const categories = await prisma.financialCategory.findMany({
-      where: { organizationId, id: { in: categoryIds }, active: true },
-      select: { id: true },
-    });
-
-    if (categories.length !== categoryIds.length) {
-      return NextResponse.json({ error: "One or more categories are invalid or inactive for this organization" }, { status: 400 });
-    }
-
-    const branchId = typeof body.branchId === "string" && body.branchId.trim() ? body.branchId : null;
-    if (branchId) {
-      const branch = await prisma.branch.findFirst({ where: { id: branchId, organizationId, active: true }, select: { id: true } });
-      if (!branch) return NextResponse.json({ error: "Branch is invalid for this organization" }, { status: 400 });
-    }
-
-    const reference = typeof body.reference === "string" ? body.reference.trim() || null : null;
-
-    const entry = await prisma.$transaction(async (tx) => {
-      const created = await tx.financialEntry.create({
-        data: {
-          organizationId,
-          entryDate,
-          description,
-          reference,
-          branchId,
-          lines: { create: normalizedLines.map((line: NormalizedLine) => ({ categoryId: line.categoryId, amount: String(line.amount) })) },
-        },
-        include: { lines: { include: { category: true } }, branch: true },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          organizationId,
-          action: "CREATE",
-          entityType: "FinancialEntry",
-          entityId: created.id,
-          metadata: { description, lineCount: normalizedLines.length },
-        },
-      });
-
-      return created;
-    });
-
+    const entry = await createFinancialEntry({ organizationId, ...validated });
     return NextResponse.json(entry, { status: 201 });
   } catch (error) {
     console.error("Financial entry creation failed", error);
