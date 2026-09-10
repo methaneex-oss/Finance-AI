@@ -18,6 +18,11 @@ enum EntryStatus {
   VOIDED
 }
 
+enum LineDirection {
+  INCREASE
+  DECREASE
+}
+
 enum UserRole {
   OWNER
   ADMIN
@@ -102,6 +107,8 @@ model FinancialEntry {
   description    String
   reference      String?
   status         EntryStatus          @default(POSTED)
+  voidReason     String?
+  voidedAt       DateTime?
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
   organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -109,16 +116,18 @@ model FinancialEntry {
   createdBy      User?                @relation(fields: [createdById], references: [id], onDelete: SetNull)
   lines          FinancialEntryLine[]
   @@index([organizationId, entryDate])
+  @@index([organizationId, status, entryDate])
   @@index([branchId, entryDate])
 }
 
 model FinancialEntryLine {
-  id         String           @id @default(cuid())
+  id         String            @id @default(cuid())
   entryId    String
   categoryId String
-  amount     Decimal          @db.Decimal(20, 2)
-  createdAt  DateTime         @default(now())
-  entry      FinancialEntry   @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  amount     Decimal           @db.Decimal(20, 2)
+  direction  LineDirection     @default(INCREASE)
+  createdAt  DateTime          @default(now())
+  entry      FinancialEntry    @relation(fields: [entryId], references: [id], onDelete: Cascade)
   category   FinancialCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   @@index([entryId])
   @@index([categoryId])
@@ -140,11 +149,11 @@ model FinancialMetric {
 }
 
 model FinancialMetricInput {
-  id         String           @id @default(cuid())
+  id         String            @id @default(cuid())
   metricId   String
   categoryId String
   alias      String
-  metric     FinancialMetric  @relation(fields: [metricId], references: [id], onDelete: Cascade)
+  metric     FinancialMetric   @relation(fields: [metricId], references: [id], onDelete: Cascade)
   category   FinancialCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   @@unique([metricId, alias])
   @@unique([metricId, categoryId])
