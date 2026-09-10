@@ -22,5 +22,7 @@ jobs:
         run: npm run db:generate
       - name: Typecheck
         run: npm run lint
+      - name: Backend tests
+        run: npm test
       - name: Production build
         run: npm run build
