@@ -6,7 +6,7 @@ export type CreateFinancialEntryInput = {
   description: string;
   reference: string | null;
   branchId: string | null;
-  lines: Array<{ categoryId: string; amount: number }>;
+  lines: Array<{ categoryId: string; amount: number; direction: "INCREASE" | "DECREASE" }>;
 };
 
 export async function createFinancialEntry(input: CreateFinancialEntryInput) {
@@ -21,7 +21,7 @@ export async function createFinancialEntry(input: CreateFinancialEntryInput) {
 
   return prisma.$transaction(async (tx) => {
     const entry = await tx.financialEntry.create({
-      data: { organizationId: input.organizationId, entryDate: input.entryDate, description: input.description, reference: input.reference, branchId: input.branchId, lines: { create: input.lines.map((line) => ({ categoryId: line.categoryId, amount: String(line.amount) })) } },
+      data: { organizationId: input.organizationId, entryDate: input.entryDate, description: input.description, reference: input.reference, branchId: input.branchId, lines: { create: input.lines.map((line) => ({ categoryId: line.categoryId, amount: String(line.amount), direction: line.direction })) } },
       include: { lines: { include: { category: true } }, branch: true },
     });
     await tx.auditLog.create({ data: { organizationId: input.organizationId, action: "CREATE", entityType: "FinancialEntry", entityId: entry.id, metadata: { description: input.description, lineCount: input.lines.length } } });
