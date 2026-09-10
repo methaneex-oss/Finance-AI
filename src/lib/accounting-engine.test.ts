@@ -10,12 +10,7 @@ test("calculates income, expenses, funds and net result without floating point a
     { id: "fund", name: "Building Fund", classification: "FUND", balance: "750.50" },
   ]);
 
-  assert.deepEqual(result, {
-    income: "3000.30",
-    expenses: "450.30",
-    funds: "750.50",
-    netOperatingResult: "2550.00",
-  });
+  assert.deepEqual(result, { income: "3000.30", expenses: "450.30", funds: "750.50", netOperatingResult: "2550.00" });
 });
 
 test("handles negative category balances correctly", () => {
@@ -25,4 +20,10 @@ test("handles negative category balances correctly", () => {
   ]);
   assert.equal(result.expenses, "-50.25");
   assert.equal(result.netOperatingResult, "150.25");
+});
+
+test("rejects an invalid accounting period", () => {
+  const from = new Date("2026-09-10");
+  const to = new Date("2026-09-01");
+  assert.throws(() => calculateSummaryFromCategories([], from, to));
 });
