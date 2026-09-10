@@ -20,11 +20,7 @@ export type Period = { from?: Date; to?: Date };
 
 export async function getCategoryBalances(organizationId: string, period: Period = {}) {
   const entries = await prisma.financialEntry.findMany({
-    where: {
-      organizationId,
-      status: "POSTED",
-      ...(period.from || period.to ? { entryDate: { ...(period.from ? { gte: period.from } : {}), ...(period.to ? { lte: period.to } : {}) } } : {}),
-    },
+    where: { organizationId, status: "POSTED", ...(period.from || period.to ? { entryDate: { ...(period.from ? { gte: period.from } : {}), ...(period.to ? { lte: period.to } : {}) } } : {}) },
     select: { lines: { select: { amount: true, direction: true, category: { select: { id: true, name: true, classification: true } } } } },
   });
 
@@ -46,33 +42,23 @@ export async function getFinancialSummary(organizationId: string, period: Period
   let income = 0n;
   let expenses = 0n;
   let funds = 0n;
-
   for (const category of categories) {
     const cents = toCents(category.balance);
     if (category.classification === "INCOME") income += cents;
     if (category.classification === "EXPENSE") expenses += cents;
     if (category.classification === "FUND") funds += cents;
   }
-
-  return {
-    income: fromCents(income),
-    expenses: fromCents(expenses),
-    funds: fromCents(funds),
-    netOperatingResult: fromCents(income - expenses),
-    categories,
-  };
+  return { income: fromCents(income), expenses: fromCents(expenses), funds: fromCents(funds), netOperatingResult: fromCents(income - expenses), categories };
 }
 
 export async function voidFinancialEntry(organizationId: string, entryId: string, reason: string) {
   const cleanReason = reason.trim();
   if (!cleanReason) throw new FinancialConflictError("A reason is required to void a financial entry");
-
   return prisma.$transaction(async (tx) => {
     const entry = await tx.financialEntry.findFirst({ where: { id: entryId, organizationId }, select: { id: true, status: true } });
     if (!entry) throw new FinancialNotFoundError("Financial entry not found");
     if (entry.status === "VOIDED") throw new FinancialConflictError("Financial entry is already voided");
-
-    const updated = await tx.financialEntry.update({ where: { id: entryId }, data: { status: "VOIDED" }, include: { lines: { include: { category: true } } } });
+    const updated = await tx.financialEntry.update({ where: { id: entryId }, data: { status: "VOIDED", voidReason: cleanReason, voidedAt: new Date() }, include: { lines: { include: { category: true } } } });
     await tx.auditLog.create({ data: { organizationId, action: "VOID", entityType: "FinancialEntry", entityId: entryId, metadata: { reason: cleanReason } } });
     return updated;
   });
