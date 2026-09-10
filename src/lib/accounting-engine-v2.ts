@@ -17,6 +17,20 @@ function fromCents(cents: bigint): string {
 }
 
 export type Period = { from?: Date; to?: Date };
+export type CategoryBalance = { id: string; name: string; classification: string; balance: string };
+
+export function calculateSummaryFromCategories(categories: CategoryBalance[]) {
+  let income = 0n;
+  let expenses = 0n;
+  let funds = 0n;
+  for (const category of categories) {
+    const cents = toCents(category.balance);
+    if (category.classification === "INCOME") income += cents;
+    if (category.classification === "EXPENSE") expenses += cents;
+    if (category.classification === "FUND") funds += cents;
+  }
+  return { income: fromCents(income), expenses: fromCents(expenses), funds: fromCents(funds), netOperatingResult: fromCents(income - expenses) };
+}
 
 export async function getCategoryBalances(organizationId: string, period: Period = {}) {
   const entries = await prisma.financialEntry.findMany({
@@ -39,16 +53,7 @@ export async function getCategoryBalances(organizationId: string, period: Period
 
 export async function getFinancialSummary(organizationId: string, period: Period = {}) {
   const categories = await getCategoryBalances(organizationId, period);
-  let income = 0n;
-  let expenses = 0n;
-  let funds = 0n;
-  for (const category of categories) {
-    const cents = toCents(category.balance);
-    if (category.classification === "INCOME") income += cents;
-    if (category.classification === "EXPENSE") expenses += cents;
-    if (category.classification === "FUND") funds += cents;
-  }
-  return { income: fromCents(income), expenses: fromCents(expenses), funds: fromCents(funds), netOperatingResult: fromCents(income - expenses), categories };
+  return { ...calculateSummaryFromCategories(categories), categories };
 }
 
 export async function voidFinancialEntry(organizationId: string, entryId: string, reason: string) {
