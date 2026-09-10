@@ -68,3 +68,28 @@ export async function voidFinancialEntry(organizationId: string, entryId: string
     return updated;
   });
 }
+
+export async function reverseFinancialEntry(organizationId: string, entryId: string, reason: string) {
+  const cleanReason = reason.trim();
+  if (!cleanReason) throw new FinancialConflictError("A reason is required to reverse a financial entry");
+
+  return prisma.$transaction(async (tx) => {
+    const original = await tx.financialEntry.findFirst({ where: { id: entryId, organizationId, status: "POSTED" }, include: { lines: true } });
+    if (!original) throw new FinancialNotFoundError("Posted financial entry not found");
+
+    const reversal = await tx.financialEntry.create({
+      data: {
+        organizationId,
+        branchId: original.branchId,
+        entryDate: new Date(),
+        description: `Reversal: ${original.description}`,
+        reference: original.reference,
+        lines: { create: original.lines.map((line) => ({ categoryId: line.categoryId, amount: line.amount, direction: line.direction === "INCREASE" ? "DECREASE" : "INCREASE" })) },
+      },
+      include: { lines: { include: { category: true } }, branch: true },
+    });
+
+    await tx.auditLog.create({ data: { organizationId, action: "REVERSE", entityType: "FinancialEntry", entityId: reversal.id, metadata: { originalEntryId: original.id, reason: cleanReason } } });
+    return reversal;
+  });
+}
