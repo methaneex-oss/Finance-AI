@@ -7,12 +7,9 @@ const allowedOperators = new Set(["+", "-"]);
 function parseFormula(formula: string, aliases: Set<string>) {
   const tokens = formula.trim().split(/\s+/).filter(Boolean);
   if (!tokens.length || tokens.length % 2 === 0) throw new Error("Formula must alternate aliases and + or - operators");
-
   for (let i = 0; i < tokens.length; i += 2) {
     if (!aliases.has(tokens[i])) throw new Error(`Unknown formula alias: ${tokens[i]}`);
-    if (i + 1 < tokens.length && !allowedOperators.has(tokens[i + 1])) {
-      throw new Error(`Unsupported operator: ${tokens[i + 1]}`);
-    }
+    if (i + 1 < tokens.length && !allowedOperators.has(tokens[i + 1])) throw new Error(`Unsupported operator: ${tokens[i + 1]}`);
   }
   return tokens;
 }
@@ -41,9 +38,7 @@ export async function POST(request: NextRequest) {
     const formula = typeof body.formula === "string" ? body.formula.trim() : "";
     const inputs = Array.isArray(body.inputs) ? body.inputs : [];
 
-    if (!name || !formula || !inputs.length) {
-      return NextResponse.json({ error: "Name, formula, and at least one input are required" }, { status: 400 });
-    }
+    if (!name || !formula || !inputs.length) return NextResponse.json({ error: "Name, formula, and at least one input are required" }, { status: 400 });
 
     const normalizedInputs = inputs.map((input: unknown) => {
       if (!input || typeof input !== "object") throw new Error("Invalid metric input");
@@ -55,27 +50,22 @@ export async function POST(request: NextRequest) {
     });
 
     const aliases = new Set(normalizedInputs.map((input) => input.alias));
+    if (aliases.size !== normalizedInputs.length) throw new Error("Metric input aliases must be unique");
     parseFormula(formula, aliases);
 
     const categoryIds = [...new Set(normalizedInputs.map((input) => input.categoryId))];
     const categories = await prisma.financialCategory.findMany({ where: { organizationId, id: { in: categoryIds }, active: true }, select: { id: true } });
-    if (categories.length !== categoryIds.length) {
-      return NextResponse.json({ error: "One or more metric inputs are not valid active categories for this organization" }, { status: 400 });
-    }
+    if (categories.length !== categoryIds.length) return NextResponse.json({ error: "One or more metric inputs are not valid active categories for this organization" }, { status: 400 });
 
-    const metric = await prisma.financialMetric.create({
-      data: {
-        organizationId,
-        name,
-        description,
-        formula,
-        inputs: { create: normalizedInputs },
-      },
-      include: { inputs: { include: { category: true } } },
-    });
-
-    await prisma.auditLog.create({
-      data: { organizationId, action: "CREATE", entityType: "FinancialMetric", entityId: metric.id, metadata: { name, formula } },
+    const metric = await prisma.$transaction(async (tx) => {
+      const created = await tx.financialMetric.create({
+        data: { organizationId, name, description, formula, inputs: { create: normalizedInputs } },
+        include: { inputs: { include: { category: true } } },
+      });
+      await tx.auditLog.create({
+        data: { organizationId, action: "CREATE", entityType: "FinancialMetric", entityId: created.id, metadata: { name, formula } },
+      });
+      return created;
     });
 
     return NextResponse.json(metric, { status: 201 });
