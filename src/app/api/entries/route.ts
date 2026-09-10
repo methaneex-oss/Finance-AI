@@ -19,9 +19,9 @@ export async function GET(request: NextRequest) {
     const toDate = parse(to);
     if (fromDate === null) return NextResponse.json({ error: "Invalid from date" }, { status: 400 });
     if (toDate === null) return NextResponse.json({ error: "Invalid to date" }, { status: 400 });
+    if (fromDate && toDate && fromDate > toDate) return NextResponse.json({ error: "from must be before to" }, { status: 400 });
 
-    const entries = await listFinancialEntries(getOrganizationId(), fromDate, toDate);
-    return NextResponse.json(entries);
+    return NextResponse.json(await listFinancialEntries(getOrganizationId(), fromDate, toDate));
   } catch (error) {
     console.error("Entry lookup failed", error);
     return NextResponse.json({ error: "Unable to load financial entries" }, { status: 500 });
@@ -32,9 +32,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
     const validated = validateEntryBody(body);
-    if (!validated) {
-      return NextResponse.json({ error: "Invalid financial entry. Date, description, and at least one positive line are required." }, { status: 400 });
-    }
+    if (!validated) return NextResponse.json({ error: "Invalid financial entry. Date, description, and at least one positive amount with valid precision are required." }, { status: 400 });
 
     const organizationId = getOrganizationId();
     const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { id: true } });
@@ -44,6 +42,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(entry, { status: 201 });
   } catch (error) {
     console.error("Financial entry creation failed", error);
-    return NextResponse.json({ error: "Unable to record financial entry" }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to record financial entry" }, { status: 400 });
   }
 }
