@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOrganizationId } from "@/lib/organization";
-import { getFinancialSummary } from "@/lib/accounting-engine";
+import { getFinancialSummary } from "@/lib/accounting-engine-v2";
 
 function parseDate(value: string | null) {
   if (!value) return undefined;
@@ -14,12 +14,28 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const from = parseDate(searchParams.get("from"));
     const to = parseDate(searchParams.get("to"));
-    if (from && to && from > to) return NextResponse.json({ error: "from cannot be after to" }, { status: 400 });
+    if (from && to && from > to) {
+      return NextResponse.json(
+        { error: "from cannot be after to" },
+        { status: 400 }
+      );
+    }
 
-    const summary = await getFinancialSummary(getOrganizationId(), { from, to });
+    const summary = await getFinancialSummary(
+      getOrganizationId(),
+      { from, to }
+    );
     return NextResponse.json(summary);
   } catch (error) {
     console.error("Accounting summary failed", error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to calculate accounting summary" }, { status: 400 });
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to calculate accounting summary",
+      },
+      { status: 400 }
+    );
   }
 }
