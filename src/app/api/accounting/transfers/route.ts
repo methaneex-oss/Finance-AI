@@ -15,18 +15,13 @@ export async function POST(request: NextRequest) {
     if (Number.isNaN(entryDate.getTime()) || !description || !fromCategoryId || !toCategoryId || !amount) {
       return NextResponse.json({ error: "entryDate, description, source category, destination category, and amount are required" }, { status: 400 });
     }
+    if (fromCategoryId === toCategoryId) return NextResponse.json({ error: "Source and destination categories must differ" }, { status: 400 });
+    if (!/^\d+(\.\d{1,2})?$/.test(amount) || Number(amount) <= 0) return NextResponse.json({ error: "Amount must be a positive value with at most two decimal places" }, { status: 400 });
 
     const entry = await createFinancialTransfer({
-      organizationId: getOrganizationId(),
-      entryDate,
-      description,
-      reference: typeof body.reference === "string" ? body.reference.trim() || null : null,
-      branchId: typeof body.branchId === "string" && body.branchId.trim() ? body.branchId.trim() : null,
-      fromCategoryId,
-      toCategoryId,
-      amount,
+      organizationId: getOrganizationId(), entryDate, description, reference: typeof body.reference === "string" ? body.reference.trim() || null : null,
+      branchId: typeof body.branchId === "string" && body.branchId.trim() ? body.branchId.trim() : null, fromCategoryId, toCategoryId, amount,
     });
-
     return NextResponse.json(entry, { status: 201 });
   } catch (error) {
     const failure = financialErrorResponse(error);
