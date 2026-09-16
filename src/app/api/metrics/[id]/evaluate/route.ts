@@ -33,12 +33,15 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         status: "POSTED",
         ...(from || to ? { entryDate: { ...(from ? { gte: from } : {}), ...(to ? { lt: to } : {}) } } : {}),
       },
-      select: { lines: { select: { categoryId: true, amount: true } } },
+      select: { lines: { select: { categoryId: true, amount: true, direction: true } } },
     });
 
     const totals = new Map<string, number>();
     for (const entry of entries) {
-      for (const line of entry.lines) totals.set(line.categoryId, (totals.get(line.categoryId) ?? 0) + Number(line.amount));
+      for (const line of entry.lines) {
+        const amount = Number(line.amount);
+        totals.set(line.categoryId, (totals.get(line.categoryId) ?? 0) + (line.direction === "DECREASE" ? -amount : amount));
+      }
     }
 
     const inputs = metric.inputs.map((input) => ({ alias: input.alias, value: totals.get(input.categoryId) ?? 0 }));
