@@ -27,3 +27,7 @@ test("annual period covers January through December", () => {
   assert.equal(from.getMonth(), 0);
   assert.equal(to.getMonth(), 11);
 });
+
+test("invalid dates are rejected", () => {
+  assert.throws(() => getPeriodRange("MONTHLY", new Date("invalid")), /Invalid period date/);
+});
