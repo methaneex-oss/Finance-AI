@@ -1,6 +1,8 @@
 export type PeriodKind = "DAILY" | "WEEKLY" | "MONTHLY" | "ANNUAL";
 
+/** Returns an inclusive local-calendar range for reporting. */
 export function getPeriodRange(kind: PeriodKind, date: Date) {
+  if (Number.isNaN(date.getTime())) throw new Error("Invalid period date");
   const start = new Date(date);
   const end = new Date(date);
 
