@@ -10,6 +10,10 @@ export type CreateFinancialEntryInput = {
 };
 
 export async function createFinancialEntry(input: CreateFinancialEntryInput) {
+  if (!input.description.trim()) throw new Error("Description is required");
+  if (input.lines.length === 0) throw new Error("At least one financial line is required");
+  if (input.lines.some((line) => !Number.isFinite(line.amount) || line.amount <= 0)) throw new Error("All financial amounts must be positive");
+
   const categoryIds = [...new Set(input.lines.map((line) => line.categoryId))];
   const categories = await prisma.financialCategory.findMany({ where: { organizationId: input.organizationId, id: { in: categoryIds }, active: true }, select: { id: true } });
   if (categories.length !== categoryIds.length) throw new Error("One or more categories are invalid or inactive for this organization");
@@ -21,10 +25,17 @@ export async function createFinancialEntry(input: CreateFinancialEntryInput) {
 
   return prisma.$transaction(async (tx) => {
     const entry = await tx.financialEntry.create({
-      data: { organizationId: input.organizationId, entryDate: input.entryDate, description: input.description, reference: input.reference, branchId: input.branchId, lines: { create: input.lines.map((line) => ({ categoryId: line.categoryId, amount: String(line.amount), direction: line.direction })) } },
+      data: {
+        organizationId: input.organizationId,
+        entryDate: input.entryDate,
+        description: input.description.trim(),
+        reference: input.reference,
+        branchId: input.branchId,
+        lines: { create: input.lines.map((line) => ({ categoryId: line.categoryId, amount: String(line.amount), direction: line.direction })) },
+      },
       include: { lines: { include: { category: true } }, branch: true },
     });
-    await tx.auditLog.create({ data: { organizationId: input.organizationId, action: "CREATE", entityType: "FinancialEntry", entityId: entry.id, metadata: { description: input.description, lineCount: input.lines.length } } });
+    await tx.auditLog.create({ data: { organizationId: input.organizationId, action: "CREATE", entityType: "FinancialEntry", entityId: entry.id, metadata: { description: input.description.trim(), lineCount: input.lines.length } } });
     return entry;
   });
 }
