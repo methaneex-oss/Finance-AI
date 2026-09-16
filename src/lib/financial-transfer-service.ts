@@ -13,6 +13,8 @@ export type TransferInput = {
 };
 
 export async function createFinancialTransfer(input: TransferInput) {
+  const description = input.description.trim();
+  if (!description) throw new FinancialValidationError("Transfer description is required");
   if (input.fromCategoryId === input.toCategoryId) throw new FinancialValidationError("Transfer source and destination must be different categories");
   if (!/^\d+(\.\d{1,2})?$/.test(input.amount) || Number(input.amount) <= 0) throw new FinancialValidationError("Transfer amount must be a positive value with at most two decimal places");
 
@@ -33,8 +35,8 @@ export async function createFinancialTransfer(input: TransferInput) {
         organizationId: input.organizationId,
         branchId: input.branchId,
         entryDate: input.entryDate,
-        description: input.description,
-        reference: input.reference,
+        description,
+        reference: input.reference?.trim() || null,
         lines: {
           create: [
             { categoryId: input.fromCategoryId, amount: input.amount, direction: "DECREASE" },
