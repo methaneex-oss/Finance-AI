@@ -22,13 +22,12 @@ export function validateEntryBody(body: Record<string, unknown>): ValidatedFinan
   const rawLines = Array.isArray(body.lines) ? body.lines as RawEntryLine[] : [];
   if (!entryDate || !description || rawLines.length === 0) return null;
 
-  const lines = rawLines.map((line) => ({
-    categoryId: typeof line.categoryId === "string" ? line.categoryId.trim() : "",
-    amount: parseAmount(line.amount),
-    direction: line.direction === "DECREASE" ? "DECREASE" as const : "INCREASE" as const,
-  }));
+  const lines = rawLines.map((line) => {
+    const direction = line.direction === "DECREASE" ? "DECREASE" as const : line.direction === "INCREASE" ? "INCREASE" as const : null;
+    return { categoryId: typeof line.categoryId === "string" ? line.categoryId.trim() : "", amount: parseAmount(line.amount), direction };
+  });
 
-  if (lines.some((line) => !line.categoryId || line.amount === null)) return null;
+  if (lines.some((line) => !line.categoryId || line.amount === null || line.direction === null)) return null;
   return {
     entryDate,
     description,
