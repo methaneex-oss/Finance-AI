@@ -1,19 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getOrganizationId } from "@/lib/organization";
-
-const allowedOperators = new Set(["+", "-"]);
+import { evaluateMetricFormula } from "@/lib/metric-engine";
 
 type MetricInput = { alias: string; categoryId: string };
-
-function parseFormula(formula: string, aliases: Set<string>) {
-  const tokens = formula.trim().split(/\s+/).filter(Boolean);
-  if (!tokens.length || tokens.length % 2 === 0) throw new Error("Formula must alternate aliases and + or - operators");
-  for (let i = 0; i < tokens.length; i += 2) {
-    if (!aliases.has(tokens[i])) throw new Error(`Unknown formula alias: ${tokens[i]}`);
-    if (i + 1 < tokens.length && !allowedOperators.has(tokens[i + 1])) throw new Error(`Unsupported operator: ${tokens[i + 1]}`);
-  }
-}
 
 export async function GET() {
   try {
@@ -45,14 +35,16 @@ export async function POST(request: NextRequest) {
       if (!input || typeof input !== "object") throw new Error("Invalid metric input");
       const value = input as Record<string, unknown>;
       const alias = typeof value.alias === "string" ? value.alias.trim() : "";
-      const categoryId = typeof value.categoryId === "string" ? value.categoryId : "";
+      const categoryId = typeof value.categoryId === "string" ? value.categoryId.trim() : "";
       if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(alias) || !categoryId) throw new Error("Each input needs a valid alias and categoryId");
       return { alias, categoryId };
     });
 
-    const aliases = new Set<string>(normalizedInputs.map((input) => input.alias));
-    if (aliases.size !== normalizedInputs.length) throw new Error("Metric input aliases must be unique");
-    parseFormula(formula, aliases);
+    const aliases = normalizedInputs.map((input) => input.alias);
+    if (new Set(aliases).size !== aliases.length) throw new Error("Metric input aliases must be unique");
+
+    // Validate using the same expression engine used at evaluation time.
+    evaluateMetricFormula(formula, normalizedInputs.map((input) => ({ alias: input.alias, value: 1 })));
 
     const categoryIds: string[] = [...new Set(normalizedInputs.map((input) => input.categoryId))];
     const categories = await prisma.financialCategory.findMany({ where: { organizationId, id: { in: categoryIds }, active: true }, select: { id: true } });
