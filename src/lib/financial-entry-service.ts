@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { FinancialValidationError, FinancialNotFoundError } from "@/lib/financial-errors";
 
 export type CreateFinancialEntryInput = {
   organizationId: string;
@@ -10,23 +11,23 @@ export type CreateFinancialEntryInput = {
 };
 
 function assertMoney(amount: number) {
-  if (!Number.isFinite(amount) || amount <= 0) throw new Error("All financial amounts must be positive");
-  if (Math.round(amount * 100) !== amount * 100) throw new Error("Financial amounts support at most two decimal places");
+  if (!Number.isFinite(amount) || amount <= 0) throw new FinancialValidationError("All financial amounts must be positive");
+  if (Math.round(amount * 100) !== amount * 100) throw new FinancialValidationError("Financial amounts support at most two decimal places");
 }
 
 export async function createFinancialEntry(input: CreateFinancialEntryInput) {
-  if (!(input.entryDate instanceof Date) || Number.isNaN(input.entryDate.getTime())) throw new Error("Entry date is invalid");
-  if (!input.description.trim()) throw new Error("Description is required");
-  if (input.lines.length === 0) throw new Error("At least one financial line is required");
+  if (!(input.entryDate instanceof Date) || Number.isNaN(input.entryDate.getTime())) throw new FinancialValidationError("Entry date is invalid");
+  if (!input.description.trim()) throw new FinancialValidationError("Description is required");
+  if (input.lines.length === 0) throw new FinancialValidationError("At least one financial line is required");
   input.lines.forEach((line) => assertMoney(line.amount));
 
   const categoryIds = [...new Set(input.lines.map((line) => line.categoryId))];
   const categories = await prisma.financialCategory.findMany({ where: { organizationId: input.organizationId, id: { in: categoryIds }, active: true }, select: { id: true } });
-  if (categories.length !== categoryIds.length) throw new Error("One or more categories are invalid or inactive for this organization");
+  if (categories.length !== categoryIds.length) throw new FinancialNotFoundError("One or more categories are invalid or inactive for this organization");
 
   if (input.branchId) {
     const branch = await prisma.branch.findFirst({ where: { id: input.branchId, organizationId: input.organizationId, active: true }, select: { id: true } });
-    if (!branch) throw new Error("Branch is invalid for this organization");
+    if (!branch) throw new FinancialNotFoundError("Branch is invalid for this organization");
   }
 
   return prisma.$transaction(async (tx) => {
