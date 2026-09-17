@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getOrganizationId } from "@/lib/organization";
 import { createFinancialEntry, listFinancialEntries } from "@/lib/financial-entry-service";
 import { validateEntryBody } from "@/lib/financial-entry-validation";
+import { financialErrorResponse } from "@/lib/financial-errors";
 
 function parseDate(value: string | null) {
   if (!value) return undefined;
@@ -20,7 +21,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(await listFinancialEntries(getOrganizationId(), fromDate, toDate));
   } catch (error) {
     console.error("Entry lookup failed", error);
-    return NextResponse.json({ error: "Unable to load financial entries" }, { status: 500 });
+    const failure = financialErrorResponse(error);
+    return NextResponse.json({ error: failure.message }, { status: failure.status });
   }
 }
 
@@ -33,6 +35,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(entry, { status: 201 });
   } catch (error) {
     console.error("Financial entry creation failed", error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to record financial entry" }, { status: 400 });
+    const failure = financialErrorResponse(error);
+    return NextResponse.json({ error: failure.message }, { status: failure.status });
   }
 }
