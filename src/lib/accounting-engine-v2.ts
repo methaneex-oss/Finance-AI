@@ -37,17 +37,13 @@ export async function getCategoryBalances(organizationId: string, period: Period
     where: { organizationId, status: "POSTED", ...(period.from || period.to ? { entryDate: { ...(period.from ? { gte: period.from } : {}), ...(period.to ? { lte: period.to } : {}) } } : {}) },
     select: { lines: { select: { amount: true, direction: true, category: { select: { id: true, name: true, classification: true } } } } },
   });
-
   const balances = new Map<string, { id: string; name: string; classification: string; cents: bigint }>();
-  for (const entry of entries) {
-    for (const line of entry.lines) {
-      const current = balances.get(line.category.id) ?? { id: line.category.id, name: line.category.name, classification: line.category.classification, cents: 0n };
-      const amount = toCents(line.amount);
-      current.cents += line.direction === "DECREASE" ? -amount : amount;
-      balances.set(line.category.id, current);
-    }
+  for (const entry of entries) for (const line of entry.lines) {
+    const current = balances.get(line.category.id) ?? { id: line.category.id, name: line.category.name, classification: line.category.classification, cents: 0n };
+    const amount = toCents(line.amount);
+    current.cents += line.direction === "DECREASE" ? -amount : amount;
+    balances.set(line.category.id, current);
   }
-
   return [...balances.values()].map(({ cents, ...balance }) => ({ ...balance, balance: fromCents(cents) }));
 }
 
@@ -72,23 +68,16 @@ export async function voidFinancialEntry(organizationId: string, entryId: string
 export async function reverseFinancialEntry(organizationId: string, entryId: string, reason: string) {
   const cleanReason = reason.trim();
   if (!cleanReason) throw new FinancialConflictError("A reason is required to reverse a financial entry");
-
   return prisma.$transaction(async (tx) => {
     const original = await tx.financialEntry.findFirst({ where: { id: entryId, organizationId, status: "POSTED" }, include: { lines: true } });
     if (!original) throw new FinancialNotFoundError("Posted financial entry not found");
-
+    const reversalReference = `REVERSAL_OF:${original.id}`;
+    const existingReversal = await tx.financialEntry.findFirst({ where: { organizationId, reference: reversalReference }, select: { id: true } });
+    if (existingReversal) throw new FinancialConflictError("Financial entry has already been reversed");
     const reversal = await tx.financialEntry.create({
-      data: {
-        organizationId,
-        branchId: original.branchId,
-        entryDate: new Date(),
-        description: `Reversal: ${original.description}`,
-        reference: original.reference,
-        lines: { create: original.lines.map((line) => ({ categoryId: line.categoryId, amount: line.amount, direction: line.direction === "INCREASE" ? "DECREASE" : "INCREASE" })) },
-      },
+      data: { organizationId, branchId: original.branchId, entryDate: new Date(), description: `Reversal: ${original.description}`, reference: reversalReference, lines: { create: original.lines.map((line) => ({ categoryId: line.categoryId, amount: line.amount, direction: line.direction === "INCREASE" ? "DECREASE" : "INCREASE" })) } },
       include: { lines: { include: { category: true } }, branch: true },
     });
-
     await tx.auditLog.create({ data: { organizationId, action: "REVERSE", entityType: "FinancialEntry", entityId: reversal.id, metadata: { originalEntryId: original.id, reason: cleanReason } } });
     return reversal;
   });
