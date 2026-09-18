@@ -14,6 +14,7 @@ export type TransferInput = {
 
 export async function createFinancialTransfer(input: TransferInput) {
   const description = input.description.trim();
+  if (!(input.entryDate instanceof Date) || Number.isNaN(input.entryDate.getTime())) throw new FinancialValidationError("Transfer date is invalid");
   if (!description) throw new FinancialValidationError("Transfer description is required");
   if (input.fromCategoryId === input.toCategoryId) throw new FinancialValidationError("Transfer source and destination must be different categories");
   if (!/^\d+(\.\d{1,2})?$/.test(input.amount) || Number(input.amount) <= 0) throw new FinancialValidationError("Transfer amount must be a positive value with at most two decimal places");
@@ -37,26 +38,14 @@ export async function createFinancialTransfer(input: TransferInput) {
         entryDate: input.entryDate,
         description,
         reference: input.reference?.trim() || null,
-        lines: {
-          create: [
-            { categoryId: input.fromCategoryId, amount: input.amount, direction: "DECREASE" },
-            { categoryId: input.toCategoryId, amount: input.amount, direction: "INCREASE" },
-          ],
-        },
+        lines: { create: [
+          { categoryId: input.fromCategoryId, amount: input.amount, direction: "DECREASE" },
+          { categoryId: input.toCategoryId, amount: input.amount, direction: "INCREASE" },
+        ] },
       },
       include: { lines: { include: { category: true } }, branch: true },
     });
-
-    await tx.auditLog.create({
-      data: {
-        organizationId: input.organizationId,
-        action: "TRANSFER",
-        entityType: "FinancialEntry",
-        entityId: entry.id,
-        metadata: { fromCategoryId: input.fromCategoryId, toCategoryId: input.toCategoryId, amount: input.amount },
-      },
-    });
-
+    await tx.auditLog.create({ data: { organizationId: input.organizationId, action: "TRANSFER", entityType: "FinancialEntry", entityId: entry.id, metadata: { fromCategoryId: input.fromCategoryId, toCategoryId: input.toCategoryId, amount: input.amount } } });
     return entry;
   });
 }
