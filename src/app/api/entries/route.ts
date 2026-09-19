@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOrganizationId } from "@/lib/organization";
+import { getAuthenticatedOrganizationId } from "@/lib/auth-context";
 import { createFinancialEntry, listFinancialEntries } from "@/lib/financial-entry-service";
 import { validateEntryBody } from "@/lib/financial-entry-validation";
 import { financialErrorResponse } from "@/lib/financial-errors";
@@ -18,7 +18,8 @@ export async function GET(request: NextRequest) {
     if (fromDate === null) return NextResponse.json({ error: "Invalid from date" }, { status: 400 });
     if (toDate === null) return NextResponse.json({ error: "Invalid to date" }, { status: 400 });
     if (fromDate && toDate && fromDate > toDate) return NextResponse.json({ error: "from must be before to" }, { status: 400 });
-    return NextResponse.json(await listFinancialEntries(getOrganizationId(), fromDate, toDate));
+    const organizationId = await getAuthenticatedOrganizationId();
+    return NextResponse.json(await listFinancialEntries(organizationId, fromDate, toDate));
   } catch (error) {
     console.error("Entry lookup failed", error);
     const failure = financialErrorResponse(error);
@@ -31,7 +32,8 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as Record<string, unknown>;
     const validated = validateEntryBody(body);
     if (!validated) return NextResponse.json({ error: "Invalid financial entry" }, { status: 400 });
-    const entry = await createFinancialEntry({ organizationId: getOrganizationId(), ...validated });
+    const organizationId = await getAuthenticatedOrganizationId();
+    const entry = await createFinancialEntry({ organizationId, ...validated });
     return NextResponse.json(entry, { status: 201 });
   } catch (error) {
     console.error("Financial entry creation failed", error);
