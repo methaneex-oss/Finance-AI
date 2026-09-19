@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getOrganizationId } from "@/lib/organization";
+import { getAuthenticatedOrganizationId } from "@/lib/auth-context";
 import { evaluateMetricFormula } from "@/lib/metric-engine";
 
 type MetricInput = { alias: string; categoryId: string };
 
 export async function GET() {
   try {
-    const organizationId = getOrganizationId();
+    const organizationId = await getAuthenticatedOrganizationId();
     const metrics = await prisma.financialMetric.findMany({
       where: { organizationId, active: true },
       include: { inputs: { include: { category: true }, orderBy: { alias: "asc" } } },
@@ -22,7 +22,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const organizationId = getOrganizationId();
+    const organizationId = await getAuthenticatedOrganizationId();
     const body = await request.json();
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const description = typeof body.description === "string" ? body.description.trim() || null : null;
@@ -42,8 +42,6 @@ export async function POST(request: NextRequest) {
 
     const aliases = normalizedInputs.map((input) => input.alias);
     if (new Set(aliases).size !== aliases.length) throw new Error("Metric input aliases must be unique");
-
-    // Validate using the same expression engine used at evaluation time.
     evaluateMetricFormula(formula, normalizedInputs.map((input) => ({ alias: input.alias, value: 1 })));
 
     const categoryIds: string[] = [...new Set(normalizedInputs.map((input) => input.categoryId))];
