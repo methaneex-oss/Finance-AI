@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOrganizationId } from "@/lib/organization";
+import { getAuthenticatedOrganizationId } from "@/lib/auth-context";
 import { createFinancialTransfer } from "@/lib/financial-transfer-service";
 import { financialErrorResponse } from "@/lib/financial-errors";
 
@@ -18,8 +18,9 @@ export async function POST(request: NextRequest) {
     if (fromCategoryId === toCategoryId) return NextResponse.json({ error: "Source and destination categories must differ" }, { status: 400 });
     if (!/^\d+(\.\d{1,2})?$/.test(amount) || Number(amount) <= 0) return NextResponse.json({ error: "Amount must be a positive value with at most two decimal places" }, { status: 400 });
 
+    const organizationId = await getAuthenticatedOrganizationId();
     const entry = await createFinancialTransfer({
-      organizationId: getOrganizationId(), entryDate, description, reference: typeof body.reference === "string" ? body.reference.trim() || null : null,
+      organizationId, entryDate, description, reference: typeof body.reference === "string" ? body.reference.trim() || null : null,
       branchId: typeof body.branchId === "string" && body.branchId.trim() ? body.branchId.trim() : null, fromCategoryId, toCategoryId, amount,
     });
     return NextResponse.json(entry, { status: 201 });
