@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { getAuthenticatedOrganizationId } from "@/lib/auth-context";
 
 const VALID_CLASSIFICATIONS = ["INCOME", "EXPENSE", "FUND"] as const;
@@ -14,7 +15,6 @@ function parseOptionalDate(value: unknown): Date | null | "invalid" {
 export async function GET() {
   try {
     const organizationId = await getAuthenticatedOrganizationId();
-    const { prisma } = await import("@/lib/prisma");
     const categories = await prisma.financialCategory.findMany({ where: { organizationId }, orderBy: { createdAt: "asc" } });
     return NextResponse.json(categories);
   } catch (error) {
@@ -39,7 +39,6 @@ export async function POST(request: NextRequest) {
 
   try {
     const organizationId = await getAuthenticatedOrganizationId();
-    const { prisma } = await import("@/lib/prisma");
     const category = await prisma.financialCategory.create({
       data: {
         organizationId,
