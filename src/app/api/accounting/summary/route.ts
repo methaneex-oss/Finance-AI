@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOrganizationId } from "@/lib/organization";
+import { getAuthenticatedOrganizationId } from "@/lib/auth-context";
 import { getFinancialSummary } from "@/lib/accounting-engine-v2";
 import { financialErrorResponse } from "@/lib/financial-errors";
 
@@ -18,7 +18,8 @@ export async function GET(request: NextRequest) {
     if (searchParams.get("from") && !from) return NextResponse.json({ error: "Invalid from date" }, { status: 400 });
     if (searchParams.get("to") && !to) return NextResponse.json({ error: "Invalid to date" }, { status: 400 });
     if (from && to && from > to) return NextResponse.json({ error: "from cannot be after to" }, { status: 400 });
-    return NextResponse.json(await getFinancialSummary(getOrganizationId(), { from: from ?? undefined, to: to ?? undefined }));
+    const organizationId = await getAuthenticatedOrganizationId();
+    return NextResponse.json(await getFinancialSummary(organizationId, { from: from ?? undefined, to: to ?? undefined }));
   } catch (error) {
     console.error("Accounting summary failed", error);
     const result = financialErrorResponse(error);
