@@ -33,18 +33,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     async jwt({ token, user }) {
+      const typedToken = token as typeof token & Record<string, unknown>;
       if (user) {
-        token.userId = user.id;
-        token.organizationId = user.organizationId;
-        token.role = user.role;
+        typedToken.userId = user.id;
+        typedToken.organizationId = user.organizationId;
+        typedToken.role = user.role;
       }
-      return token;
+      return typedToken;
     },
     async session({ session, token }) {
-      if (session.user && token.userId && token.organizationId && token.role) {
-        session.user.id = token.userId;
-        session.user.organizationId = token.organizationId;
-        session.user.role = token.role;
+      const typedToken = token as Record<string, unknown>;
+      const userId = typeof typedToken.userId === "string" ? typedToken.userId : undefined;
+      const organizationId = typeof typedToken.organizationId === "string" ? typedToken.organizationId : undefined;
+      const role = typeof typedToken.role === "string" ? typedToken.role : undefined;
+      if (session.user && userId && organizationId && role) {
+        session.user.id = userId;
+        session.user.organizationId = organizationId;
+        session.user.role = role;
       }
       return session;
     },
@@ -63,13 +68,5 @@ declare module "next-auth" {
   interface User {
     organizationId: string;
     role: string;
-  }
-}
-
-declare module "next-auth/jwt" {
-  interface JWT {
-    userId?: string;
-    organizationId?: string;
-    role?: string;
   }
 }
