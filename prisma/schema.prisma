@@ -7,10 +7,29 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum CategoryClassification { INCOME EXPENSE FUND }
-enum EntryStatus { POSTED VOIDED }
-enum LineDirection { INCREASE DECREASE }
-enum UserRole { OWNER ADMIN FINANCE_OFFICER AUDITOR VIEWER }
+enum CategoryClassification {
+  INCOME
+  EXPENSE
+  FUND
+}
+
+enum EntryStatus {
+  POSTED
+  VOIDED
+}
+
+enum LineDirection {
+  INCREASE
+  DECREASE
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  FINANCE_OFFICER
+  AUDITOR
+  VIEWER
+}
 
 model Organization {
   id String @id @default(cuid())
