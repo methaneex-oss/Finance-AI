@@ -31,6 +31,14 @@ enum UserRole {
   VIEWER
 }
 
+enum FinancialDocumentStatus {
+  UPLOADED
+  PROCESSING
+  REVIEW_REQUIRED
+  PROCESSED
+  FAILED
+}
+
 model Organization {
   id String @id @default(cuid())
   name String
@@ -45,6 +53,7 @@ model Organization {
   entries FinancialEntry[]
   metrics FinancialMetric[]
   auditLogs AuditLog[]
+  documents FinancialDocument[]
 }
 
 model Branch {
@@ -78,6 +87,7 @@ model User {
   branch Branch? @relation(fields: [organizationId, branchId], references: [organizationId, id], onDelete: Restrict)
   entries FinancialEntry[]
   auditLogs AuditLog[]
+  documents FinancialDocument[]
   @@unique([organizationId, id])
   @@index([organizationId])
 }
@@ -161,6 +171,39 @@ model FinancialMetricInput {
   @@unique([metricId, alias])
   @@unique([metricId, categoryId])
   @@index([categoryId])
+}
+
+model FinancialDocument {
+  id String @id @default(cuid())
+  organizationId String
+  uploadedById String?
+  fileName String
+  contentType String
+  sizeBytes Int
+  checksum String?
+  storageKey String
+  status FinancialDocumentStatus @default(UPLOADED)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploadedBy User? @relation(fields: [organizationId, uploadedById], references: [organizationId, id], onDelete: Restrict)
+  extractions DocumentExtraction[]
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status])
+  @@unique([organizationId, storageKey])
+}
+
+model DocumentExtraction {
+  id String @id @default(cuid())
+  documentId String
+  processor String
+  status FinancialDocumentStatus
+  confidence Decimal? @db.Decimal(5, 4)
+  extractedData Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  document FinancialDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  @@index([documentId, createdAt])
 }
 
 model AuditLog {
