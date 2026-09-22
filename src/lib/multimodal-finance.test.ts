@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { calculateExtractedAmounts, validateExtractedFinancialData } from "./multimodal-finance";
+import { calculateExtractedAmounts, createMultimodalExtractionService, validateExtractedFinancialData } from "./multimodal-finance";
 
 test("calculates an authoritative total from extracted monetary values", () => {
   const result = calculateExtractedAmounts([
@@ -45,4 +45,21 @@ test("rejects impossible extraction confidence", () => {
     }),
     /confidence/i,
   );
+});
+
+test("normalizes provider output through the validation boundary", async () => {
+  const service = createMultimodalExtractionService({
+    async extract() {
+      return {
+        sourceId: "doc-2",
+        fields: [
+          { type: "amount", value: "1500", currency: "NGN", confidence: 0.91, evidence: { page: 2 } },
+        ],
+      };
+    },
+  });
+
+  const result = await service.extract({ documentId: "doc-2", contentType: "image/jpeg", content: new Uint8Array([1, 2]) });
+  assert.equal(result.fields[0].value, 1500);
+  assert.equal(result.fields[0].evidence.page, 2);
 });
