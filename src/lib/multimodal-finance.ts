@@ -48,7 +48,9 @@ export type DeterministicAmountResult = {
 
 function parseAmount(value: string | number): number | null {
   if (typeof value === "number") {
-    return Number.isFinite(value) && value >= 0 ? value : null;
+    if (!Number.isFinite(value) || value < 0) return null;
+    const rounded = Math.round(value * 100);
+    return Math.abs(value - rounded / 100) < Number.EPSILON * Math.max(1, Math.abs(value)) ? value : null;
   }
 
   const text = value.trim();
@@ -103,12 +105,19 @@ export function createMultimodalExtractionService(
   };
 }
 
+function toMinorUnits(value: number): number {
+  const minor = Math.round(value * 100);
+  if (!Number.isSafeInteger(minor)) throw new Error("Extracted amount exceeds supported precision/range");
+  return minor;
+}
+
 export function calculateExtractedAmounts(amounts: ExtractedAmount[]): DeterministicAmountResult {
   if (amounts.length === 0) throw new Error("At least one extracted amount is required");
 
   const currency = amounts[0].currency.trim();
   if (!currency) throw new Error("Extracted amounts require a currency");
 
+  let totalMinorUnits = 0;
   for (const amount of amounts) {
     if (amount.currency.trim() !== currency) {
       throw new Error("All extracted amounts must use the same currency");
@@ -116,10 +125,12 @@ export function calculateExtractedAmounts(amounts: ExtractedAmount[]): Determini
     if (!Number.isFinite(amount.value) || amount.value < 0) {
       throw new Error("Extracted amounts must be finite and non-negative");
     }
+
+    totalMinorUnits += toMinorUnits(amount.value);
+    if (!Number.isSafeInteger(totalMinorUnits)) {
+      throw new Error("Extracted amount total is outside supported numeric range");
+    }
   }
 
-  const total = amounts.reduce((sum, amount) => sum + amount.value, 0);
-  if (!Number.isFinite(total)) throw new Error("Extracted amount total is outside supported numeric range");
-
-  return { total, currency };
+  return { total: totalMinorUnits / 100, currency };
 }
