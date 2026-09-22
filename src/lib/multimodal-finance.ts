@@ -22,6 +22,20 @@ export type ValidatedExtractedFinancialData = {
   fields: ExtractedFinancialField[];
 };
 
+export type MultimodalExtractionRequest = {
+  documentId: string;
+  contentType: string;
+  content: Uint8Array;
+};
+
+export interface MultimodalExtractionProvider {
+  extract(request: MultimodalExtractionRequest): Promise<ExtractedFinancialData>;
+}
+
+export interface MultimodalExtractionService {
+  extract(request: MultimodalExtractionRequest): Promise<ValidatedExtractedFinancialData>;
+}
+
 export type ExtractedAmount = {
   value: number;
   currency: string;
@@ -70,6 +84,23 @@ export function validateExtractedFinancialData(
   });
 
   return { sourceId: input.sourceId.trim(), fields };
+}
+
+export function createMultimodalExtractionService(
+  provider: MultimodalExtractionProvider,
+): MultimodalExtractionService {
+  return {
+    async extract(request) {
+      if (!request.documentId.trim()) throw new Error("documentId is required");
+      if (!request.contentType.trim()) throw new Error("contentType is required");
+      if (!(request.content instanceof Uint8Array) || request.content.byteLength === 0) {
+        throw new Error("Document content is required");
+      }
+
+      const extracted = await provider.extract(request);
+      return validateExtractedFinancialData(extracted);
+    },
+  };
 }
 
 export function calculateExtractedAmounts(amounts: ExtractedAmount[]): DeterministicAmountResult {
