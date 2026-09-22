@@ -49,11 +49,11 @@ export type DeterministicAmountResult = {
 function parseAmount(value: string | number): number | null {
   if (typeof value === "number") {
     if (!Number.isFinite(value) || value < 0) return null;
-    const rounded = Math.round(value * 100);
-    return Math.abs(value - rounded / 100) < Number.EPSILON * Math.max(1, Math.abs(value)) ? value : null;
+    const minor = Math.round(value * 100);
+    return Number.isSafeInteger(minor) && Math.abs(value * 100 - minor) < 1e-9 ? value : null;
   }
 
-  const text = value.trim();
+  const text = value.trim().replace(/,/g, "");
   if (!/^\d+(\.\d{1,2})?$/.test(text)) return null;
   const amount = Number(text);
   return Number.isFinite(amount) && amount >= 0 ? amount : null;
@@ -105,10 +105,12 @@ export function createMultimodalExtractionService(
   };
 }
 
-function toMinorUnits(value: number): number {
+function toMinorUnits(value: number): bigint {
   const minor = Math.round(value * 100);
-  if (!Number.isSafeInteger(minor)) throw new Error("Extracted amount exceeds supported precision/range");
-  return minor;
+  if (!Number.isSafeInteger(minor)) {
+    throw new Error("Extracted amount exceeds supported precision/range");
+  }
+  return BigInt(minor);
 }
 
 export function calculateExtractedAmounts(amounts: ExtractedAmount[]): DeterministicAmountResult {
@@ -117,7 +119,7 @@ export function calculateExtractedAmounts(amounts: ExtractedAmount[]): Determini
   const currency = amounts[0].currency.trim();
   if (!currency) throw new Error("Extracted amounts require a currency");
 
-  let totalMinorUnits = 0;
+  let totalMinorUnits = 0n;
   for (const amount of amounts) {
     if (amount.currency.trim() !== currency) {
       throw new Error("All extracted amounts must use the same currency");
@@ -125,12 +127,8 @@ export function calculateExtractedAmounts(amounts: ExtractedAmount[]): Determini
     if (!Number.isFinite(amount.value) || amount.value < 0) {
       throw new Error("Extracted amounts must be finite and non-negative");
     }
-
     totalMinorUnits += toMinorUnits(amount.value);
-    if (!Number.isSafeInteger(totalMinorUnits)) {
-      throw new Error("Extracted amount total is outside supported numeric range");
-    }
   }
 
-  return { total: totalMinorUnits / 100, currency };
+  return { total: Number(totalMinorUnits) / 100, currency };
 }
