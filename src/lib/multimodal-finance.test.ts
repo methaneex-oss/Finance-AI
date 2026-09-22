@@ -14,6 +14,15 @@ test("calculates an authoritative total from extracted monetary values", () => {
   assert.equal(result.total, 4000);
 });
 
+test("calculates decimal amounts without floating-point drift", () => {
+  const result = calculateExtractedAmounts([
+    { value: 0.1, currency: "NGN" },
+    { value: 0.2, currency: "NGN" },
+  ]);
+
+  assert.equal(result.total, 0.3);
+});
+
 test("rejects mixed currencies from a single deterministic calculation", () => {
   assert.throws(
     () => calculateExtractedAmounts([
