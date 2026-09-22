@@ -19,7 +19,7 @@ export type ExtractedFinancialData = {
 
 export type ValidatedExtractedFinancialData = {
   sourceId: string;
-  fields: Array<ExtractedFinancialField & { value: number }>;
+  fields: ExtractedFinancialField[];
 };
 
 export type ExtractedAmount = {
@@ -59,12 +59,14 @@ export function validateExtractedFinancialData(
     if (!field.type.trim()) throw new Error("Extraction field type is required");
     validateConfidence(field.confidence);
 
-    const value = field.type === "amount" ? parseAmount(field.value) : field.value;
-    if (field.type === "amount" && value === null) {
+    if (field.type !== "amount") return { ...field };
+
+    const value = parseAmount(field.value);
+    if (value === null) {
       throw new Error("Extracted amount must be a non-negative number with at most two decimal places");
     }
 
-    return { ...field, value: value as number };
+    return { ...field, value };
   });
 
   return { sourceId: input.sourceId.trim(), fields };
