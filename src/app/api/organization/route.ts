@@ -1,17 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getOrganizationId } from "@/lib/organization";
+import { getAuthenticatedOrganizationId } from "@/lib/auth-context";
 
 export async function GET() {
   try {
-    const organizationId = getOrganizationId();
+    const organizationId = await getAuthenticatedOrganizationId();
     const organization = await prisma.organization.findUnique({
       where: { id: organizationId },
       include: { branches: { where: { active: true }, orderBy: { name: "asc" } } },
     });
 
-    if (!organization) return NextResponse.json({ error: "Organization is not configured" }, { status: 404 });
-
+    if (!organization) return NextResponse.json({ error: "Organization not found" }, { status: 404 });
     return NextResponse.json(organization);
   } catch (error) {
     console.error("Organization lookup failed", error);

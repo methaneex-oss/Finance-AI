@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getOrganizationId } from "@/lib/organization";
+import { getAuthenticatedOrganizationId } from "@/lib/auth-context";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   const limit = Number.isFinite(limitValue) ? Math.min(Math.max(Math.floor(limitValue), 1), 200) : 50;
 
   try {
-    const organizationId = getOrganizationId();
+    const organizationId = await getAuthenticatedOrganizationId();
     const logs = await prisma.auditLog.findMany({
       where: { organizationId },
       include: { actor: { select: { id: true, name: true, email: true, role: true } } },

@@ -23,7 +23,11 @@ export function validateEntryBody(body: Record<string, unknown>): ValidatedFinan
   if (!entryDate || !description || rawLines.length === 0) return null;
 
   const lines = rawLines.map((line) => {
-    const direction = line.direction === "DECREASE" ? "DECREASE" as const : line.direction === "INCREASE" ? "INCREASE" as const : null;
+    const direction = line.direction === undefined || line.direction === "INCREASE"
+      ? "INCREASE" as const
+      : line.direction === "DECREASE"
+        ? "DECREASE" as const
+        : null;
     return { categoryId: typeof line.categoryId === "string" ? line.categoryId.trim() : "", amount: parseAmount(line.amount), direction };
   });
 

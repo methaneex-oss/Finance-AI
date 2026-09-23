@@ -4,10 +4,10 @@ import { calculateSummaryFromCategories } from "./accounting-engine-v2";
 
 test("calculates income, expenses, funds and net result without floating point arithmetic", () => {
   const result = calculateSummaryFromCategories([
-    { id: "income", name: "Offerings", classification: "INCOME", balance: "1000.10" },
-    { id: "income-2", name: "Tithe", classification: "INCOME", balance: "2000.20" },
+    { id: "income", name: "Primary Revenue", classification: "INCOME", balance: "1000.10" },
+    { id: "income-2", name: "Secondary Revenue", classification: "INCOME", balance: "2000.20" },
     { id: "expense", name: "Utilities", classification: "EXPENSE", balance: "450.30" },
-    { id: "fund", name: "Building Fund", classification: "FUND", balance: "750.50" },
+    { id: "fund", name: "Capital Reserve", classification: "FUND", balance: "750.50" },
   ]);
   assert.deepEqual(result, { income: "3000.30", expenses: "450.30", funds: "750.50", netOperatingResult: "2550.00" });
 });

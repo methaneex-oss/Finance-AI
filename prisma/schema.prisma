@@ -7,10 +7,37 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum CategoryClassification { INCOME EXPENSE FUND }
-enum EntryStatus { POSTED VOIDED }
-enum LineDirection { INCREASE DECREASE }
-enum UserRole { OWNER ADMIN FINANCE_OFFICER AUDITOR VIEWER }
+enum CategoryClassification {
+  INCOME
+  EXPENSE
+  FUND
+}
+
+enum EntryStatus {
+  POSTED
+  VOIDED
+}
+
+enum LineDirection {
+  INCREASE
+  DECREASE
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  FINANCE_OFFICER
+  AUDITOR
+  VIEWER
+}
+
+enum FinancialDocumentStatus {
+  UPLOADED
+  PROCESSING
+  REVIEW_REQUIRED
+  PROCESSED
+  FAILED
+}
 
 model Organization {
   id String @id @default(cuid())
@@ -26,6 +53,7 @@ model Organization {
   entries FinancialEntry[]
   metrics FinancialMetric[]
   auditLogs AuditLog[]
+  documents FinancialDocument[]
 }
 
 model Branch {
@@ -50,14 +78,16 @@ model User {
   branchId String?
   name String
   email String @unique
+  passwordHash String?
   role UserRole @default(VIEWER)
   active Boolean @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  branch Branch? @relation(fields: [organizationId, branchId], references: [organizationId, id], onDelete: SetNull)
+  branch Branch? @relation(fields: [organizationId, branchId], references: [organizationId, id], onDelete: Restrict)
   entries FinancialEntry[]
   auditLogs AuditLog[]
+  documents FinancialDocument[]
   @@unique([organizationId, id])
   @@index([organizationId])
 }
@@ -95,8 +125,8 @@ model FinancialEntry {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  branch Branch? @relation(fields: [organizationId, branchId], references: [organizationId, id], onDelete: SetNull)
-  createdBy User? @relation(fields: [organizationId, createdById], references: [organizationId, id], onDelete: SetNull)
+  branch Branch? @relation(fields: [organizationId, branchId], references: [organizationId, id], onDelete: Restrict)
+  createdBy User? @relation(fields: [organizationId, createdById], references: [organizationId, id], onDelete: Restrict)
   lines FinancialEntryLine[]
   @@index([organizationId, entryDate])
   @@index([organizationId, status, entryDate])
@@ -143,6 +173,39 @@ model FinancialMetricInput {
   @@index([categoryId])
 }
 
+model FinancialDocument {
+  id String @id @default(cuid())
+  organizationId String
+  uploadedById String?
+  fileName String
+  contentType String
+  sizeBytes Int
+  checksum String?
+  storageKey String
+  status FinancialDocumentStatus @default(UPLOADED)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploadedBy User? @relation(fields: [organizationId, uploadedById], references: [organizationId, id], onDelete: Restrict)
+  extractions DocumentExtraction[]
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status])
+  @@unique([organizationId, storageKey])
+}
+
+model DocumentExtraction {
+  id String @id @default(cuid())
+  documentId String
+  processor String
+  status FinancialDocumentStatus
+  confidence Decimal? @db.Decimal(5, 4)
+  extractedData Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  document FinancialDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  @@index([documentId, createdAt])
+}
+
 model AuditLog {
   id String @id @default(cuid())
   organizationId String
@@ -153,7 +216,7 @@ model AuditLog {
   metadata Json?
   createdAt DateTime @default(now())
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  actor User? @relation(fields: [organizationId, actorId], references: [organizationId, id], onDelete: SetNull)
+  actor User? @relation(fields: [organizationId, actorId], references: [organizationId, id], onDelete: Restrict)
   @@index([organizationId, createdAt])
   @@index([entityType, entityId])
 }
